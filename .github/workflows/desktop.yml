@@ -6,9 +6,6 @@
 name: desktop
 
 on:
-  workflow_dispatch:
-# temporarily paused while the AppImage failure is diagnosed
-x-on:
   push:
     branches: [main]
   workflow_dispatch:
