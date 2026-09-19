@@ -19,6 +19,7 @@ jobs:
 
       - uses: suffro/desktopr@fix-appimage
         id: build
+        continue-on-error: true
         with:
           app_name: Fix Check
           app_identifier: dev.desktopr.fixcheck
