@@ -1,0 +1,71 @@
+# Builds this web app into a desktop app with the Desktopr action.
+#
+# Nothing from Desktopr is cloned or vendored here: the action brings the
+# runtime with it. The two jobs cover the two ways to point it at a web app.
+
+name: desktop
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  from-assets:
+    name: embed the built web app
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Build the web app exactly as you normally would.
+      - run: npm install
+      - run: npm run build
+
+      # Then hand the output folder to Desktopr.
+      - uses: suffro/desktopr@v1
+        id: build
+        with:
+          app_name: Desktopr Example
+          app_identifier: dev.desktopr.example
+          app_version: 1.0.0
+          frontend_dist: dist
+          artifact_name: example-from-assets
+
+      - name: Check an installer came out
+        run: |
+          set -euo pipefail
+          ls -la "${{ steps.build.outputs.dist_dir }}"
+          test -n "$(find "${{ steps.build.outputs.dist_dir }}" -name '*.AppImage' -print -quit)" \
+            || { echo "::error::no AppImage was produced"; exit 1; }
+
+  from-url:
+    name: load a web app URL
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      # No build step at all: the app opens this address.
+      - uses: suffro/desktopr@v1
+        id: build
+        with:
+          app_name: Desktopr Example Online
+          app_identifier: dev.desktopr.example.online
+          app_version: 1.0.0
+          app_url: https://desktopr.dev
+          artifact_name: example-from-url
+
+      - name: Check an installer came out
+        run: |
+          set -euo pipefail
+          ls -la "${{ steps.build.outputs.dist_dir }}"
+          test -n "$(find "${{ steps.build.outputs.dist_dir }}" -name '*.AppImage' -print -quit)" \
+            || { echo "::error::no AppImage was produced"; exit 1; }
