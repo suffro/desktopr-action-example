@@ -1,0 +1,48 @@
+# Temporary: reproduces the AppImage bundling failure with the output Tauri
+# hides, so the cause can be read instead of guessed.
+
+name: debug
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: suffro/desktopr@v1
+        id: build
+        continue-on-error: true
+        with:
+          app_name: Debug
+          app_identifier: dev.desktopr.debug
+          app_version: 1.0.0
+          app_url: https://desktopr.dev
+          smoke_test: false
+          upload_artifact: false
+
+      - name: Re-run the bundling with output
+        run: |
+          set -uo pipefail
+          runtime=/home/runner/work/_actions/suffro/desktopr/v1
+
+          echo "=== AppImage tools in the Tauri cache ==="
+          ls -la "$HOME/.cache/tauri" || true
+
+          echo "=== bundle directory after the failure ==="
+          find "$runtime/src-tauri/target/release/bundle" -maxdepth 2 || true
+
+          echo "=== fuse ==="
+          ls -la /dev/fuse || echo "no /dev/fuse"
+          dpkg -l | grep -i fuse || echo "no fuse package"
+
+          echo "=== re-running cargo tauri build --verbose ==="
+          cd "$runtime/src-tauri"
+          cargo tauri build --ci --verbose -- --locked 2>&1 | tail -120
