@@ -1,5 +1,5 @@
-# Temporary: reproduces the AppImage bundling failure with the output Tauri
-# hides, so the cause can be read instead of guessed.
+# Temporary: finds out why the first AppImage bundling fails while an
+# identical second one succeeds.
 
 name: debug
 
@@ -28,21 +28,35 @@ jobs:
           smoke_test: false
           upload_artifact: false
 
-      - name: Re-run the bundling with output
+      - name: Did anything replace the pinned tools?
+        run: |
+          set -uo pipefail
+          echo "XDG_CACHE_HOME=${XDG_CACHE_HOME:-unset}"
+          echo "APPIMAGE_EXTRACT_AND_RUN=${APPIMAGE_EXTRACT_AND_RUN:-unset}"
+          echo "--- what is in the cache now ---"
+          ls -la "$HOME/.cache/tauri"
+          sha256sum "$HOME/.cache/tauri/"* || true
+          echo "--- what was pinned ---"
+          echo "e762bea85c8eb0d4b3508d46e5c1f037f717d0f9303ae3b4aafc8b04991fa1ef linuxdeploy-x86_64.AppImage (pinned)"
+          echo "992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3 linuxdeploy-plugin-appimage.AppImage (pinned)"
+          echo "f30140a43a0a59e46db21bdefdf749b9e9f2c6946e92afabbacf98b8ae73fb4f AppRun-x86_64 (pinned)"
+
+      # Put the tree back the way it was before the first attempt, so the next
+      # build is a first attempt too — this time with the output visible.
+      - name: Reproduce a first attempt, verbosely
         run: |
           set -uo pipefail
           runtime=/home/runner/work/_actions/suffro/desktopr/v1
 
-          echo "=== AppImage tools in the Tauri cache ==="
-          ls -la "$HOME/.cache/tauri" || true
+          rm -rf "$runtime/src-tauri/target/release/bundle"
+          curl -fsSL --retry 3 -o "$HOME/.cache/tauri/linuxdeploy-x86_64.AppImage" \
+            https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy/linuxdeploy-x86_64.AppImage
+          chmod +x "$HOME/.cache/tauri/linuxdeploy-x86_64.AppImage"
+          sha256sum "$HOME/.cache/tauri/linuxdeploy-x86_64.AppImage"
 
-          echo "=== bundle directory after the failure ==="
-          find "$runtime/src-tauri/target/release/bundle" -maxdepth 2 || true
+          echo "--- can the tool run at all? ---"
+          "$HOME/.cache/tauri/linuxdeploy-x86_64.AppImage" --version 2>&1 | head -5 || echo "exit=$?"
 
-          echo "=== fuse ==="
-          ls -la /dev/fuse || echo "no /dev/fuse"
-          dpkg -l | grep -i fuse || echo "no fuse package"
-
-          echo "=== re-running cargo tauri build --verbose ==="
+          echo "--- build ---"
           cd "$runtime/src-tauri"
-          cargo tauri build --ci --verbose -- --locked 2>&1 | tail -120
+          cargo tauri build --ci --verbose -- --locked 2>&1 | grep -viE "^\s+(Compiling|Downloaded|Setting rpath)" | tail -80
